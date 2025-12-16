@@ -6,116 +6,82 @@ class AuthController extends CI_Controller
 	public function __construct()
 	{
 		parent::__construct();
+		$this->load->model('DatabaseModel');
 	}
-
-	// register->login->logout
 
 	public function register()
 	{
-		$jsonData = file_get_contents('php://input');
-
-		if ($request = $this->toolbox->isValidJSON($jsonData)) {
-			$name = $request->name;
-			$email = $request->email;
-			$password = $request->password;
-
-			if (empty($name) || empty($email) || empty($password)) {
-				$response = ['status' => false, 'message' => 'Missing required parameters'];
-				$this->toolbox->response($response);
-				die();
-			}
-
-			$insertData = [
-				'name' => $name,
-				'email' => $email,
-				'password' => password_hash($password, PASSWORD_DEFAULT)
-			];
-
-			if ($this->DatabaseModel->insertIntoTable('users', $insertData)) {
-				$response = [
-					'status' => true,
-					'message' => 'Registration successful'
-				];
-			} else {
-				$response = [
-					'status' => false,
-					'message' => 'Registration failed'
-				];
-			}
-		} else {
-			$response = [
-				'status' => false,
-				'message' => 'Invalid JSON'
-			];
+		if ($this->input->method() !== 'post') {
+			show_404();
 		}
 
-		$this->toolbox->response($response);
-	}
+		$name             = trim($this->input->post('name', TRUE));
+		$email            = trim($this->input->post('email', TRUE));
+		$password         = $this->input->post('password');
+		$confirmPassword  = $this->input->post('confirm_password');
 
-	public function login()
-	{
-		$jsonData = file_get_contents('php://input');
-
-		if ($request = $this->toolbox->isValidJSON($jsonData)) {
-			$email = $request->email;
-			$password = $request->password;
-
-			if (!empty($email) && !empty($password)) {
-
-				$userData = $this->DatabaseModel->fetchTableData('users', ['email' => $email, 'isDeleted' => 0, 'status' => 1]);
-				if (!empty($userData)) {
-					$dbPassword = $userData[0]->password;
-
-					if (password_verify($password, $dbPassword)) {
-						$jwtData = [
-							'userId' => $userData[0]->id,
-							'email' => $userData[0]->email
-						];
-						$token = $this->jwt->encode($jwtData);
-						$response = [
-							'status' => true,
-							'token' => $token,
-							'message' => 'User logged in successfully'
-						];
-					} else {
-						$response = [
-							'status' => false,
-							'message' => 'Invalid user password'
-						];
-					}
-				} else {
-					$response = [
-						'status' => false,
-						'message' => 'Invalid user email'
-					];
-				}
-			} else {
-				$response = [
-					'status' => false,
-					'message' => 'Required missing parameters'
-				];
-			}
-		} else {
-			$response = [
-				'status' => false,
-				'message' => 'Invalid JSON'
-			];
+		if (!$name || !$email || !$password || !$confirmPassword) {
+			$this->session->set_flashdata('error', 'All fields are required');
+			redirect('register');
 		}
 
-		$this->toolbox->response($response);
+		if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+			$this->session->set_flashdata('error', 'Invalid email address');
+			redirect('register');
+		}
+
+		if ($password !== $confirmPassword) {
+			$this->session->set_flashdata('error', 'Passwords do not match');
+			redirect('register');
+		}
+
+		$user = $this->DatabaseModel->fetchTableData('users', ['email' => $email]);
+
+		if (!empty($user)) {
+
+			if ((int)$user[0]->is_deleted === 1) {
+				$this->session->set_flashdata('error', 'User already exists and is deleted');
+				redirect('register');
+			}
+
+			if ((int)$user[0]->status === 0) {
+				$this->session->set_flashdata('error', 'User already exists but is inactive');
+				redirect('register');
+			}
+
+			$this->session->set_flashdata('error', 'User already exists');
+			redirect('register');
+		}
+
+		$insertData = [
+			'name'       => $name,
+			'email'      => $email,
+			'password'   => password_hash($password, PASSWORD_BCRYPT),
+			'status'     => 1,
+			'is_deleted' => 0,
+			'created_at' => date('Y-m-d H:i:s')
+		];
+
+		$userId = $this->DatabaseModel->insertIntoTable('users', $insertData);
+
+		if (!$userId) {
+			$this->session->set_flashdata('error', 'Registration failed. Please try again.');
+			redirect('register');
+		}
+
+		$this->session->set_userdata([
+			'user_id'    => $userId,
+			'user_name'  => $name,
+			'user_email' => $email,
+			'logged_in'  => TRUE
+		]);
+
+		$this->session->set_flashdata('success', 'Registration successful');
+		redirect('dashboard');
 	}
 
-	public function test() 
-	{
-		// $userData = $this->DatabaseModel->fetchTableData('users');
 
-		// $token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NDgzOTM1MzEsImV4cCI6MTc0ODM5MzU5MSwiZGF0YSI6eyJ1c2VySWQiOiIyIiwiZW1haWwiOiJhZGl0eWF0ZXN0QGdtYWlsLmNvbSJ9fQ.B1hVNPS4OIb33UsIc43azhNbbknKstNi_zStkCvg_OM";
+	public function login() {}
 
-		// $t = $this->jwt->decode($token);
-
-		// var_dump($t); die;
-
-		$d = $this->jwt->verifyToken();
-		var_dump($d); die;
-	}
+	public function logout() {}
 }

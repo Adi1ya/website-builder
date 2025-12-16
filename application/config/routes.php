@@ -56,7 +56,7 @@ $route['translate_uri_dashes'] = FALSE;
 // AuthController
 $route['register'] = 'AuthController/register';
 $route['login'] = 'AuthController/login';
-$route['test'] = 'AuthController/test';
+$route['test'] = 'AuthController/test'; 
 
 // UploadController
 $route['upload-file'] = 'UploadController/uploadFile';

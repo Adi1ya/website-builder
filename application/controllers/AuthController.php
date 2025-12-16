@@ -160,5 +160,20 @@ class AuthController extends CI_Controller
 	}
 
 
-	public function logout() {}
+	public function logout()
+	{
+		if (!$this->session->userdata('logged_in')) {
+			show_404();
+		}
+
+		// Regenerate session ID to invalidate the current session
+		// (prevents session reuse / fixation after logout)
+		$this->session->sess_regenerate(TRUE);
+
+		// Destroy all session data
+		$this->session->sess_destroy();
+
+		$this->session->set_flashdata('success', 'You have been logged out successfully');
+		redirect('login');
+	}
 }

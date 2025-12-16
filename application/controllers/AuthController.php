@@ -7,48 +7,41 @@ class AuthController extends CI_Controller
 	{
 		parent::__construct();
 		$this->load->model('DatabaseModel');
+		$this->load->library('form_validation');
 	}
 
 	public function register()
 	{
-		if ($this->input->method() !== 'POST') {
+		if ($this->input->method(TRUE) !== 'POST') {
 			show_404();
 		}
 
-		$name             = trim($this->input->post('name', TRUE));
-		$email            = trim($this->input->post('email', TRUE));
-		$password         = $this->input->post('password');
-		$confirmPassword  = $this->input->post('confirm_password');
+		$this->form_validation->set_rules('name', 'Name', 'required|trim');
+		$this->form_validation->set_rules('email', 'Email', 'required|trim|valid_email');
+		$this->form_validation->set_rules('password', 'Password', 'required');
+		$this->form_validation->set_rules('confirm_password', 'Confirm Password', 'required|matches[password]');
 
-		if (!$name || !$email || !$password || !$confirmPassword) {
-			$this->session->set_flashdata('error', 'All fields are required');
+		if ($this->form_validation->run() === FALSE) {
+			$this->session->set_flashdata('error', validation_errors());
 			redirect('register');
 			return;
 		}
 
-		if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-			$this->session->set_flashdata('error', 'Invalid email address');
-			redirect('register');
-			return;
-		}
-
-		if ($password !== $confirmPassword) {
-			$this->session->set_flashdata('error', 'Passwords do not match');
-			redirect('register');
-			return;
-		}
+		$name = $this->input->post('name', TRUE);
+		$email = $this->input->post('email', TRUE);
+		$password = $this->input->post('password');
 
 		$user = $this->DatabaseModel->fetchTableData('users', ['email' => $email]);
 
 		if (!empty($user)) {
-
-			if ((int)$user[0]->is_deleted === 1) {
+			$existing = $user[0];
+			if ((int)$existing->is_deleted === 1) {
 				$this->session->set_flashdata('error', 'User already exists and is deleted');
 				redirect('register');
 				return;
 			}
 
-			if ((int)$user[0]->status === 0) {
+			if ((int)$existing->status === 0) {
 				$this->session->set_flashdata('error', 'User already exists but is inactive');
 				redirect('register');
 				return;
@@ -87,33 +80,23 @@ class AuthController extends CI_Controller
 		redirect('dashboard');
 	}
 
-
 	public function login()
 	{
 		if ($this->input->method(TRUE) !== 'POST') {
 			show_404();
 		}
 
-		$email    = trim($this->input->post('email', TRUE));
-		$password = $this->input->post('password', TRUE);
+		$this->form_validation->set_rules('email', 'Email', 'required|trim|valid_email');
+		$this->form_validation->set_rules('password', 'Password', 'required');
 
-		if (empty($email)) {
-			$this->session->set_flashdata('error', 'Email is required');
+		if ($this->form_validation->run() === FALSE) {
+			$this->session->set_flashdata('error', validation_errors());
 			redirect('login');
 			return;
 		}
 
-		if (empty($password)) {
-			$this->session->set_flashdata('error', 'Password is required');
-			redirect('login');
-			return;
-		}
-
-		if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-			$this->session->set_flashdata('error', 'Invalid email address');
-			redirect('login');
-			return;
-		}
+		$email = $this->input->post('email', TRUE);
+		$password = $this->input->post('password');
 
 		$user = $this->DatabaseModel->fetchTableData('users', ['email' => $email]);
 
@@ -150,15 +133,12 @@ class AuthController extends CI_Controller
 			'logged_in'  => TRUE
 		]);
 
-		// IMPORTANT SECURITY:
-		// Regenerate session ID after authentication to prevent session fixation attacks.
-		// Old session ID is destroyed and a new secure one is issued.
+		// Security: regenerate session ID after login
 		$this->session->sess_regenerate(TRUE);
 
 		$this->session->set_flashdata('success', 'Login successful');
 		redirect('dashboard');
 	}
-
 
 	public function logout()
 	{
@@ -166,11 +146,7 @@ class AuthController extends CI_Controller
 			show_404();
 		}
 
-		// Regenerate session ID to invalidate the current session
-		// (prevents session reuse / fixation after logout)
-		$this->session->sess_regenerate(TRUE);
-
-		// Destroy all session data
+		$this->session->sess_regenerate(TRUE); // invalidate session ID
 		$this->session->sess_destroy();
 
 		$this->session->set_flashdata('success', 'You have been logged out successfully');
